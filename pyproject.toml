@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "nonebot-plugin-pluginupdatecheck"
+version = "0.1.0"
+description = "A plugin of chatbot based on nonebot2 framework,it can check the updateable plugins already installed.Also can install new plugins."
+authors = ["xi-yue-233 <1004514855@qq.com>"]
+readme = "README.md"
+packages = [{include = "nonebot_plugin_pluginupdatecheck"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+nonebot2 = "^2.0.0rc2"
+toml = "^0.10.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
