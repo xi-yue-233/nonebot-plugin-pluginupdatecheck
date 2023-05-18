@@ -1,12 +1,13 @@
 import asyncio
+import json
 
+import numpy as np
 import toml
 from nonebot import get_driver, on_command
 from nonebot.matcher import Matcher
 from nonebot.adapters.onebot.v11 import Bot, MessageEvent, Message
 from nonebot.params import CommandArg, ArgPlainText
 from nonebot.permission import SUPERUSER
-
 
 from .config import Config
 from .tool import send_forward_msg
@@ -21,6 +22,22 @@ install_plg = on_command("ins_plg", aliases={'安装插件'})
 add_env = on_command("add_env", aliases={'添加env'})
 
 
+async def get_sum(plugin,sem):
+    async with sem:
+        plugin[0]=plugin[0].replace("_","-")
+
+        p = await asyncio.subprocess.create_subprocess_shell(f"pip show {plugin[0]}",
+                                                             stdout=asyncio.subprocess.PIPE,
+                                                             stderr=asyncio.subprocess.PIPE)
+        stdout, stderr = await p.communicate()
+        stdout = stdout.decode('gb2312')
+
+        summary_line = next(line for line in stdout.split('\n') if line.startswith('Summary:'))
+        summary = summary_line.split(':')[-1].strip()
+
+
+        return [plugin[0],f"{plugin[0]}\n版本更新：{plugin[1]}->{plugin[2]}\n介绍:{summary}"]
+
 @check_upgrade.handle()
 async def check_upgrade(
         bot: Bot,
@@ -32,23 +49,73 @@ async def check_upgrade(
     p = await asyncio.subprocess.create_subprocess_shell("pip list -o -i https://pypi.org/simple",
                                                          stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     stdout, stderr = await p.communicate()
-    try:
-        stdout = stdout.decode('gb2312')
-        stderr = stderr.decode('gb2312')
-        # 第一行是名称,第二行是分割线
-        stdout = stdout.split("\r\n")
-        up_list = [i.split() for i in stdout[2:-1]]  # 库信息的排布:'numpy  旧版本 新版本 xx' 按空格分割拿到包名就好
-        toml_file = toml.load("pyproject.toml").get("tool").get("nonebot").get("plugins")
-        nonebot_up_list = []
-        for i in up_list:
-            i[0] = i[0].replace("-", "_")
-            if i[0] in toml_file:
-                i[0] = i[0].replace("_", "-")
-                nonebot_up_list.append(i[0])
-                nonebot_up_list.append(f"版本更新：{i[1]}->{i[2]}")
-        await send_forward_msg(bot, event, "更新小助手", str(bot.self_id), nonebot_up_list)
-    except Exception:
-        result = str(stdout or stderr)
+    stdout = stdout.decode('gb2312')
+    stderr = stderr.decode('gb2312')
+    # 第一行是名称,第二行是分割线
+    stdout = stdout.split("\r\n")
+    up_list = [i.split() for i in stdout[2:-1]]  # 库信息的排布:'numpy  旧版本 新版本 xx' 按空格分割拿到包名就好
+    toml_file = toml.load("pyproject.toml").get("tool").get("nonebot").get("plugins")
+    task_list=[]
+    sem = asyncio.Semaphore(5)
+    for i in up_list:
+        i[0]=i[0].replace("-","_")
+        if i[0] in toml_file:
+            task = asyncio.create_task(get_sum(i, sem))
+            task_list.append(task)
+    update_list = await asyncio.gather(*task_list)
+    update_list = [x for x in update_list if x != '']
+    update_list = list(np.ravel(update_list))
+
+
+    await send_forward_msg(bot, event, "更新小助手", str(bot.self_id), update_list)
+
+
+# async def compare_plugin(plugin,sem):
+#     async with sem:
+#         p = await asyncio.subprocess.create_subprocess_shell(f"pip show {plugin}",
+#                                                              stdout=asyncio.subprocess.PIPE,
+#                                                              stderr=asyncio.subprocess.PIPE)
+#         stdout, stderr = await p.communicate()
+#         stdout = stdout.decode('gb2312')
+#
+#         # 解析输出并获取版本和摘要信息
+#         version_line = next(line for line in stdout.split('\n') if line.startswith('Version:'))
+#         version = version_line.split(':')[-1].strip()
+#
+#         summary_line = next(line for line in stdout.split('\n') if line.startswith('Summary:'))
+#         summary = summary_line.split(':')[-1].strip()
+#
+#         # 获取pypi.org/pypi/{plugin}/json上的信息
+#         data = await main(plugin)
+#         far_version = data["info"]["version"]
+#         print(far_version)
+#
+#         if version != far_version:
+#             return [plugin, f"{plugin}\n版本更新：{version}->{far_version}\n介绍:{summary}"]
+#         else:
+#             return ""
+#
+#
+# @check_upgrade.handle()
+# async def check_upgrade(
+#         bot: Bot,
+#         event: MessageEvent,
+#         matcher: Matcher
+# ):
+#     if not await SUPERUSER(bot, event):
+#         return
+#     # 读取toml中的nonebot2插件
+#     toml_file = toml.load("pyproject.toml").get("tool").get("nonebot").get("plugins")
+#     task_list = []
+#     sem = asyncio.Semaphore(5)
+#     # 并发执行pip show获取插件本地信息
+#     for plugin in toml_file:
+#         task = asyncio.create_task(compare_plugin(plugin, sem))
+#         task_list.append(task)
+#     update_list = await asyncio.gather(*task_list)
+#     update_list = [x for x in update_list if x != '']
+#     update_list = list(np.ravel(update_list))
+#     await send_forward_msg(bot, event, "更新小助手", str(bot.self_id), update_list)
 
 
 @origin_look.handle()
@@ -216,4 +283,3 @@ async def update(
     with open('.env', 'a') as file:
         file.write(f"\n{env}\n")
         await add_env.finish(f"添加成功")
-
