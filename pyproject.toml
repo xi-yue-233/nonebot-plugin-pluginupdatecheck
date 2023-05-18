@@ -10,6 +10,7 @@ packages = [{include = "nonebot_plugin_pluginupdatecheck"}]
 python = "^3.9"
 nonebot2 = "^2.0.0rc2"
 toml = "^0.10.2"
+numpy = "^1.24.3"
 
 
 [build-system]
