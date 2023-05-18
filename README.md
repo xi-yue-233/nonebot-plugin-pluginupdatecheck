@@ -12,7 +12,7 @@ nonebot2便携插件安装器
 
 ## 💬 前言
 
-<size=5>使用虚拟环境的暂时不要使用此插件！！！</size>
+<font size=5 color=red>使用虚拟环境的暂时不要使用此插件！！！</font>
 一个nonebot2的插件便捷安装和升级插件（基于nb-cli和pip)
 
 ## 📖 介绍
